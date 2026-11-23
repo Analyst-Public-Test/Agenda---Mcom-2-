@@ -438,6 +438,8 @@ def rodar(a):
     for l in lug_ex:
         m = re.match(r"EX:(.*?)(?: \((.*)\))?$", l)
         cid, pais = m.group(1), (m.group(2) or m.group(1))
+        if S.pais_ignorar(pais):
+            continue
         info = S.pais_info(pais)
         if not info:
             sem_pais.append(l); continue

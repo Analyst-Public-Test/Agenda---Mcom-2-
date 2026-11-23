@@ -71,6 +71,14 @@ for n in ('Rio Branco','Maceió','Macapá','Manaus','Salvador','Fortaleza','Bras
 DF_FORTE=(r"minist[eé]rio|mist[eé]rio|esplanada|bras[ií]lia|planalto|\bDF\b|anatel|ag[eê]ncia nacional|senado|c[aâ]mara dos|congresso nacional|pal[aá]cio|distrito federal|"
           r"\bTCU\b|\bCGU\b|\bSTF\b|itamaraty|\bEBC\b|telebras|\bSCS\b|\bSAUS\b|\bSHIS\b|\bSGAN\b|\bSBN\b|\bSBS\b|\bSEPN\b|\bSAIN\b|\bCLN\b|\bCLS\b|\bW3\b|asa (sul|norte)|\bGM\b|"
           r"gabinete|\bMCom\b|\bMCOM\b|\bUnB\b|Finatec|Royal Tulip|\bCICB\b|Centro Internacional de Convenções|Ulysses Guimar|Lago (Sul|Norte)|Setor de Clubes|\bMME\b|\bMGI\b|Kubitschek|Complexo Brasil 21|Casa Civil")
+ESTADOS={'acre':'AC','alagoas':'AL','amapa':'AP','amazonas':'AM','bahia':'BA','ceara':'CE','espirito santo':'ES','goias':'GO','maranhao':'MA','mato grosso do sul':'MS','mato grosso':'MT','minas gerais':'MG','para':'PA','paraiba':'PB','parana':'PR','pernambuco':'PE','piaui':'PI','rio de janeiro':'RJ','rio grande do norte':'RN','rio grande do sul':'RS','rondonia':'RO','roraima':'RR','santa catarina':'SC','sao paulo':'SP','sergipe':'SE','tocantins':'TO'}
+def cidade_estado_extenso(txt):
+    """'Parintins - Amazonas' / 'Sobral, Ceará' -> ('AM','Parintins'); só vale com separador antes do nome do estado"""
+    t=N(txt or '')
+    for nome in sorted(ESTADOS,key=len,reverse=True):
+        m=re.search(r"([A-Z][\w'.]+(?: (?:de|da|do|dos|das|e|[A-Z][\w'.]+))*)\s*(?:/|-|,)\s*"+re.escape(nome)+r"\b",t,re.I)
+        if m and ESTADOS[nome]!='DF': return ESTADOS[nome],m.group(1).strip()
+    return None
 def cidade_uf(txt):
     """acha 'Cidade/UF' ou 'Cidade - UF' no texto"""
     m=re.search(r"([A-ZÁÉÍÓÚÂÊÔÃÕÇ][\wÁÉÍÓÚÂÊÔÃÕÇáéíóúâêôãõç'.]+(?: (?:de|da|do|dos|das|e|[A-ZÁÉÍÓÚÂÊÔÃÕÇ][\wáéíóúâêôãõç'.]+))*)\s*(?:/|-|–|,)\s*(%s)\b"%'|'.join(UFS),txt or '')
@@ -101,6 +109,8 @@ def decidir_lugar_setel(reg,vgs):
     cu=cidade_uf(loc) or cidade_uf(reg.get('assunto',''))
     if cu and cu[0] in UFS and cu[0]!='DF': 
         return f'{cu[0]}:{NOMES.get(N(cu[1]).lower(),cu[1])}',False
+    ce=cidade_estado_extenso(loc) or cidade_estado_extenso(reg.get('assunto',''))
+    if ce: return f'{ce[0]}:{ce[1]}',False
     c=achar_cidade(loc) or achar_cidade(reg.get('assunto',''))
     if c and c[0]!='DF': return f'{c[0]}:{c[1]}',False
     exl=achar_exterior(loc)
@@ -111,45 +121,231 @@ def decidir_lugar_setel(reg,vgs):
     return 'DF:Brasília',True
 
 # ---------------------------------------------------------------------------------------------
-# Países (mapa-múndi do painel): código ISO3 -> nome, aliases (sem acento, minúsculas), latitude, longitude
-# A posição no mapa é linear: x = 500.1 + 2.779*lon ; y = 277.8 - 3.304*lat
+# Países do mapa-múndi do painel: (código ISO3, nome, outros nomes aceitos, x, y)
+#   - os 173 países com polígono no mapa usam um ponto DENTRO do próprio país (capital ou ponto interno);
+#   - ilhas e cidades-estado sem polígono (Cingapura, Hong Kong, Cabo Verde, Malta...) só têm o ponto.
+# O nome vem do Portal como "Cidade/País"; a comparação ignora acento, maiúscula e pontuação.
+# Se aparecer um país que não está aqui, ele vai para 'pendencias_de_pais' no JSON: basta incluir uma linha.
 # ---------------------------------------------------------------------------------------------
 PAISES=[
- ("ARG","Argentina",[],-34.6,-58.4),("BOL","Bolívia",[],-16.5,-68.1),("CHL","Chile",[],-33.4,-70.7),("COL","Colômbia",[],4.7,-74.1),
- ("ECU","Equador",[],-0.2,-78.5),("PRY","Paraguai",[],-25.3,-57.6),("PER","Peru",[],-12.0,-77.0),("URY","Uruguai",[],-34.9,-56.2),
- ("VEN","Venezuela",[],10.5,-66.9),("GUY","Guiana",[],6.8,-58.2),("SUR","Suriname",[],5.9,-55.2),("PAN","Panamá",[],9.0,-79.5),
- ("CRI","Costa Rica",[],9.9,-84.1),("CUB","Cuba",[],23.1,-82.4),("DOM","República Dominicana",["dominicana"],18.5,-69.9),
- ("MEX","México",[],19.4,-99.1),("GTM","Guatemala",[],14.6,-90.5),("HND","Honduras",[],14.1,-87.2),("SLV","El Salvador",[],13.7,-89.2),
- ("NIC","Nicarágua",[],12.1,-86.3),("HTI","Haiti",["haiti"],18.5,-72.3),("JAM","Jamaica",[],18.0,-76.8),("TTO","Trinidad e Tobago",[],10.7,-61.5),
- ("USA","Estados Unidos",["estados unidos da america","eua","usa"],38.9,-77.0),("CAN","Canadá",[],45.4,-75.7),
- ("PRT","Portugal",[],38.7,-9.1),("ESP","Espanha",[],41.4,2.2),("FRA","França",[],48.9,2.35),("DEU","Alemanha",[],52.5,13.4),
- ("ITA","Itália",[],41.9,12.5),("GBR","Reino Unido",["inglaterra","reino unido da gra-bretanha"],51.5,-0.1),("IRL","Irlanda",[],53.3,-6.3),
- ("NLD","Países Baixos",["holanda"],52.4,4.9),("BEL","Bélgica",[],50.85,4.35),("LUX","Luxemburgo",[],49.6,6.1),("CHE","Suíça",[],46.2,6.1),
- ("AUT","Áustria",[],48.2,16.4),("SWE","Suécia",[],59.3,18.1),("NOR","Noruega",[],59.9,10.75),("FIN","Finlândia",[],60.2,24.9),
- ("DNK","Dinamarca",[],55.7,12.6),("POL","Polônia",[],52.2,21.0),("CZE","República Tcheca",["tchequia","republica checa"],50.1,14.4),
- ("HUN","Hungria",[],47.5,19.0),("ROU","Romênia",[],44.4,26.1),("GRC","Grécia",[],38.0,23.7),("TUR","Turquia",[],39.9,32.9),
- ("UKR","Ucrânia",[],50.45,30.5),("RUS","Rússia",["russia"],55.75,37.6),("HRV","Croácia",[],45.8,16.0),("SRB","Sérvia",[],44.8,20.5),
- ("AZE","Azerbaijão",[],40.4,49.9),("CHN","China",[],39.9,116.4),("JPN","Japão",[],35.7,139.7),("KOR","Coreia do Sul",["coreia","republica da coreia"],37.6,127.0),
- ("IND","Índia",[],28.6,77.2),("THA","Tailândia",[],13.75,100.5),("VNM","Vietnã",["vietna","viet nam"],21.0,105.85),("IDN","Indonésia",[],-6.2,106.8),
- ("MYS","Malásia",[],3.1,101.7),("PHL","Filipinas",[],14.6,121.0),("ARE","Emirados Árabes Unidos",["emirados arabes"],25.2,55.3),
- ("QAT","Catar",["qatar"],25.3,51.5),("SAU","Arábia Saudita",[],24.7,46.7),("ISR","Israel",[],31.8,35.2),("JOR","Jordânia",[],31.95,35.9),
- ("KAZ","Cazaquistão",[],51.2,71.4),("MAR","Marrocos",[],34.0,-6.8),("EGY","Egito",[],30.0,31.2),("ZAF","África do Sul",[],-25.7,28.2),
- ("AGO","Angola",[],-8.8,13.2),("MOZ","Moçambique",[],-25.95,32.6),("NGA","Nigéria",[],9.1,7.5),("KEN","Quênia",["kenia"],-1.3,36.8),
- ("ETH","Etiópia",[],9.0,38.75),("GHA","Gana",[],5.6,-0.2),("SEN","Senegal",[],14.7,-17.45),("TUN","Tunísia",[],36.8,10.2),
- ("DZA","Argélia",[],36.75,3.05),("AUS","Austrália",[],-35.3,149.1),("NZL","Nova Zelândia",[],-41.3,174.8),("TLS","Timor-Leste",["timor leste"],-8.55,125.6),
+ ("FJI","Fiji",[],994.5,337.0),
+ ("TZA","Tanzânia",["republica unida da tanzania"],596.5,298.8),
+ ("ESH","Saara Ocidental",[],466.2,197.7),
+ ("CAN","Canadá",[],289.7,127.8),
+ ("USA","Estados Unidos",["estados unidos da america", "eua", "usa"],286.1,149.3),
+ ("KAZ","Cazaquistão",[],698.5,108.6),
+ ("UZB","Uzbequistão",[],675.4,139.8),
+ ("PNG","Papua-Nova Guiné",["papua nova guine"],900.7,299.9),
+ ("IDN","Indonésia",[],796.9,298.3),
+ ("ARG","Argentina",[],319.1,394.6),
+ ("CHL","Chile",[],303.6,388.2),
+ ("COD","República Democrática do Congo",["congo kinshasa", "rd congo", "republica democratica do congo"],565.5,287.4),
+ ("SOM","Somália",[],626.9,262.4),
+ ("KEN","Quênia",["kenia"],602.4,282.1),
+ ("SDN","Sudão",[],583.0,225.1),
+ ("TCD","Chade",[],551.7,227.3),
+ ("HTI","Haiti",["haiti"],299.2,216.7),
+ ("DOM","República Dominicana",["dominicana"],305.8,216.7),
+ ("RUS","Rússia",["russia"],604.6,93.6),
+ ("BHS","Bahamas",[],283.4,196.7),
+ ("FLK","Ilhas Malvinas",["ilhas falkland", "malvinas"],334.7,449.1),
+ ("NOR","Noruega",[],530.0,79.9),
+ ("GRL","Groenlândia",[],384.9,30.6),
+ ("ATF","Terras Austrais Francesas",[],693.3,441.2),
+ ("TLS","Timor-Leste",["timor leste"],849.7,307.1),
+ ("ZAF","África do Sul",[],578.5,362.7),
+ ("LSO","Lesoto",[],578.2,376.1),
+ ("MEX","México",[],224.7,213.7),
+ ("URY","Uruguai",[],343.9,393.1),
+ ("BRA","Brasil",[],352.6,313.8),
+ ("BOL","Bolívia",[],310.9,332.3),
+ ("PER","Peru",[],286.1,317.4),
+ ("COL","Colômbia",[],294.2,262.3),
+ ("PAN","Panamá",[],279.2,248.1),
+ ("CRI","Costa Rica",[],266.4,245.1),
+ ("NIC","Nicarágua",[],260.3,237.8),
+ ("HND","Honduras",[],257.8,231.2),
+ ("SLV","El Salvador",[],252.2,232.5),
+ ("GTM","Guatemala",[],248.6,229.6),
+ ("BLZ","Belize",[],253.6,221.1),
+ ("VEN","Venezuela",[],314.2,243.1),
+ ("GUY","Guiana",["guiana guiana inglesa", "guiana inglesa"],338.4,255.3),
+ ("SUR","Suriname",[],344.7,264.4),
+ ("FRA","França",[],506.6,116.2),
+ ("ECU","Equador",[],281.9,278.5),
+ ("PRI","Porto Rico",[],314.9,217.7),
+ ("JAM","Jamaica",[],286.7,218.3),
+ ("CUB","Cuba",[],281.5,206.5),
+ ("ZWE","Zimbábue",["zimbabue"],582.8,340.6),
+ ("BWA","Botsuana",["botswana"],566.1,351.1),
+ ("NAM","Namíbia",[],547.7,351.2),
+ ("SEN","Senegal",[],451.6,229.2),
+ ("MLI","Mali",[],490.2,221.0),
+ ("MRT","Mauritânia",[],471.3,211.2),
+ ("BEN","Benin",["benim"],506.5,245.9),
+ ("NER","Níger",[],526.0,220.7),
+ ("NGA","Nigéria",[],520.9,247.7),
+ ("CMR","Camarões",[],535.0,259.3),
+ ("TGO","Togo",["republica togolesa"],502.9,250.4),
+ ("GHA","Gana",[],499.5,259.3),
+ ("CIV","Costa do Marfim",[],484.4,253.1),
+ ("GIN","Guiné",[],469.3,243.6),
+ ("GNB","Guiné-Bissau",["guine bissau"],458.1,238.5),
+ ("LBR","Libéria",[],473.9,256.8),
+ ("SLE","Serra Leoa",[],467.2,249.9),
+ ("BFA","Burkina Faso",["burkina fasso"],495.0,237.3),
+ ("CAF","República Centro-Africana",[],556.6,256.3),
+ ("COG","Congo",["republica do congo"],542.1,281.0),
+ ("GAB","Gabão",[],532.5,280.0),
+ ("GNQ","Guiné Equatorial",[],528.9,272.6),
+ ("ZMB","Zâmbia",[],577.0,322.4),
+ ("MWI","Malaui",["malawi"],595.0,321.7),
+ ("MOZ","Moçambique",[],598.6,334.8),
+ ("SWZ","Essuatíni",["eswatini", "suazilandia"],587.1,365.6),
+ ("AGO","Angola",[],536.8,306.9),
+ ("BDI","Burundi",[],582.9,289.0),
+ ("ISR","Israel",[],597.1,173.9),
+ ("LBN","Líbano",[],599.8,165.8),
+ ("MDG","Madagascar",[],629.6,342.4),
+ ("PSE","Palestina",["estado da palestina"],597.9,172.4),
+ ("GMB","Gâmbia",[],456.8,233.3),
+ ("TUN","Tunísia",[],526.4,165.0),
+ ("DZA","Argélia",[],507.3,184.8),
+ ("JOR","Jordânia",[],599.9,172.2),
+ ("ARE","Emirados Árabes Unidos",["emirados arabes"],653.8,194.5),
+ ("QAT","Catar",["qatar"],643.2,194.2),
+ ("KWT","Kuwait",["cuaite"],632.2,180.9),
+ ("IRQ","Iraque",[],621.5,168.6),
+ ("OMN","Omã",[],655.8,209.9),
+ ("VUT","Vanuatu",[],963.6,328.3),
+ ("KHM","Camboja",[],791.5,235.9),
+ ("THA","Tailândia",[],779.4,232.4),
+ ("LAO","Laos",[],788.3,217.0),
+ ("MMR","Mianmar",["myanmar"],768.1,208.3),
+ ("VNM","Vietnã",["viet nam", "vietna"],794.3,208.4),
+ ("PRK","Coreia do Norte",[],853.1,145.1),
+ ("KOR","Coreia do Sul",["coreia", "republica da coreia"],853.0,153.6),
+ ("MNG","Mongólia",[],785.8,123.0),
+ ("IND","Índia",[],714.6,183.3),
+ ("BGD","Bangladesh",[],750.7,199.2),
+ ("BTN","Butão",[],751.4,187.5),
+ ("NPL","Nepal",[],733.4,184.6),
+ ("PAK","Paquistão",[],692.7,178.9),
+ ("AFG","Afeganistão",[],683.5,165.8),
+ ("TJK","Tadjiquistão",["tajiquistao"],697.3,150.3),
+ ("KGZ","Quirguistão",["quirguizistao"],707.3,140.7),
+ ("TKM","Turcomenistão",[],664.8,148.6),
+ ("IRN","Irã",["ira"],650.7,170.4),
+ ("SYR","Síria",[],606.8,162.3),
+ ("ARM","Armênia",[],624.9,144.8),
+ ("SWE","Suécia",[],546.1,70.1),
+ ("BLR","Belarus",["bielorrussia"],577.6,100.9),
+ ("UKR","Ucrânia",[],584.9,111.1),
+ ("POL","Polônia",[],558.5,105.3),
+ ("AUT","Áustria",[],545.7,118.5),
+ ("HUN","Hungria",[],552.9,120.9),
+ ("MDA","Moldávia",["moldova"],578.7,121.5),
+ ("ROU","Romênia",[],572.6,131.1),
+ ("LTU","Lituânia",[],566.4,95.1),
+ ("LVA","Letônia",[],568.9,90.0),
+ ("EST","Estônia",[],571.8,83.8),
+ ("DEU","Alemanha",[],537.3,104.3),
+ ("BGR","Bulgária",[],570.3,136.5),
+ ("GRC","Grécia",[],566.0,152.2),
+ ("TUR","Turquia",[],591.5,146.0),
+ ("ALB","Albânia",[],555.6,141.8),
+ ("HRV","Croácia",[],544.6,126.5),
+ ("CHE","Suíça",[],522.7,123.0),
+ ("LUX","Luxemburgo",[],516.4,113.5),
+ ("BEL","Bélgica",[],512.2,109.8),
+ ("NLD","Países Baixos",["holanda"],513.7,104.7),
+ ("PRT","Portugal",[],474.8,149.9),
+ ("ESP","Espanha",[],506.2,141.0),
+ ("IRL","Irlanda",[],482.6,101.7),
+ ("NCL","Nova Caledônia",[],960.4,349.2),
+ ("SLB","Ilhas Salomão",[],945.0,309.8),
+ ("NZL","Nova Zelândia",[],985.9,414.3),
+ ("AUS","Austrália",[],914.4,394.4),
+ ("LKA","Sri Lanka",[],724.1,252.7),
+ ("CHN","China",[],823.6,146.0),
+ ("TWN","Taiwan",[],836.2,199.4),
+ ("ITA","Itália",[],534.8,139.4),
+ ("DNK","Dinamarca",[],535.1,93.8),
+ ("GBR","Reino Unido",["inglaterra", "reino unido da gra-bretanha"],499.8,107.6),
+ ("ISL","Islândia",[],447.9,62.6),
+ ("AZE","Azerbaijão",["azerbaidjao"],638.8,144.3),
+ ("GEO","Geórgia",[],620.9,138.6),
+ ("PHL","Filipinas",[],836.4,229.6),
+ ("MYS","Malásia",[],782.7,267.6),
+ ("BRN","Brunei",[],819.2,262.7),
+ ("SVN","Eslovênia",[],541.4,125.3),
+ ("FIN","Finlândia",[],569.3,78.9),
+ ("SVK","Eslováquia",["republica eslovaca"],554.3,116.7),
+ ("CZE","República Tcheca",["republica checa", "tchequia"],540.1,112.3),
+ ("ERI","Eritreia",["eritrea"],607.4,226.9),
+ ("JPN","Japão",[],888.3,159.8),
+ ("PRY","Paraguai",[],340.0,361.4),
+ ("YEM","Iêmen",["iemen"],631.9,225.3),
+ ("SAU","Arábia Saudita",[],629.9,196.2),
+ ("CYP","Chipre",[],592.0,162.4),
+ ("MAR","Marrocos",[],481.2,165.5),
+ ("EGY","Egito",[],586.8,178.7),
+ ("LBY","Líbia",[],549.9,188.7),
+ ("ETH","Etiópia",[],607.8,248.1),
+ ("DJI","Djibuti",[],618.0,239.1),
+ ("UGA","Uganda",[],589.9,273.8),
+ ("RWA","Ruanda",[],582.9,284.8),
+ ("BIH","Bósnia e Herzegovina",["bosnia herzegovina", "bosnia-herzegovina"],549.5,131.8),
+ ("MKD","Macedônia do Norte",["macedonia"],560.4,140.3),
+ ("SRB","Sérvia",[],557.1,129.8),
+ ("MNE","Montenegro",[],553.6,136.6),
+ ("TTO","Trinidad e Tobago",[],329.2,242.4),
+ ("SSD","Sudão do Sul",[],583.9,253.9),
+ ("SGP","Cingapura",["singapura"],788.6,273.3),
+ ("HKG","Hong Kong",[],817.5,204.1),
+ ("MAC","Macau",[],815.5,204.5),
+ ("CPV","Cabo Verde",[],434.8,228.6),
+ ("STP","São Tomé e Príncipe",[],518.7,276.8),
+ ("MLT","Malta",[],540.4,159.2),
+ ("BRB","Barbados",[],334.5,234.5),
+ ("MUS","Maurício",["mauricio"],659.9,344.5),
+ ("GRD","Granada",[],328.6,237.8),
+ ("KNA","São Cristóvão e Névis",["sao cristovao e nevis"],325.9,220.6),
+ ("TUV","Tuvalu",[],998.1,305.9),
+ ("MCO","Mônaco",[],520.7,133.4),
+ ("SMR","San Marino",[],534.6,132.8),
+ ("MDV","Maldivas",[],704.4,263.9),
+ ("BHR","Bahrein",["bareine"],640.7,191.2),
+ ("VAT","Vaticano",["santa se"],534.7,139.4),
+ ("LIE","Liechtenstein",[],526.5,122.2),
+ ("AND","Andorra",[],504.3,137.4),
+ ("SYC","Seychelles",[],654.3,293.0),
+ ("COM","Comores",[],620.4,316.5),
+ ("WSM","Samoa",[],22.7,323.4),
+ ("TON","Tonga",[],13.2,347.5),
+ ("KIR","Kiribati",[],980.9,273.2),
+ ("DMA","Dominica",[],329.5,227.2),
+ ("LCA","Santa Lúcia",[],330.6,231.5),
+ ("VCT","São Vicente e Granadinas",[],330.0,234.2),
+ ("ATG","Antígua e Barbuda",[],328.4,221.3),
+ ("ATA","Antártica",["antartida"],337.8,462.0),
+ ("KOS","Kosovo",[],559.0,136.7),
+ ("GUF","Guiana Francesa",[],354.8,261.6),
 ]
 def _nk(s):
-    return re.sub(r"[^a-z0-9 ]"," ",N(s).lower()).strip()
+    return re.sub(r"\s+"," ",re.sub(r"[^a-z0-9 ]"," ",N(s).lower())).strip()
 _IDX={}
-for _i,_n,_al,_la,_lo in PAISES:
-    for _k in [_n]+_al: _IDX[_nk(_k)]=(_i,_n,_la,_lo)
+for _i,_n,_al,_x,_y in PAISES:
+    for _k in [_n]+list(_al): _IDX[_nk(_k)]=(_i,_n,_x,_y)
+IGNORAR_PAIS={"informacoes protegidas por sigilo","sem informacao","su a"}
+def pais_ignorar(nome):
+    """destinos que não são país (sigilo, sem informação)"""
+    return _nk(nome) in IGNORAR_PAIS or not _nk(nome)
 def pais_info(nome):
-    """nome do país como vem do Portal -> (iso3, nome, x, y) ou None"""
+    """nome do país como vem do Portal -> (iso3, nome, x, y) ou None. Só aceita nome exato (sem adivinhar)."""
     k=_nk(nome)
     if k in _IDX:
-        i,n,la,lo=_IDX[k]; return i,n,round(500.1+2.779*lo,1),round(277.8-3.304*la,1)
-    for kk,(i,n,la,lo) in _IDX.items():
-        if len(kk)>4 and (kk in k or k in kk): return i,n,round(500.1+2.779*lo,1),round(277.8-3.304*la,1)
+        i,n,x,y=_IDX[k]; return i,n,x,y
     return None
 
 CIDADES_EX={'washington':'USA','nova york':'USA','new york':'USA','las vegas':'USA','san francisco':'USA','miami':'USA','orlando':'USA','houston':'USA',
