@@ -1,0 +1,9 @@
+{
+ "_ajuda": "Correções manuais da SETEL, aplicadas por último e nunca sobrescritas pela automação. Chave = ID do compromisso no e-Agendas. Campos opcionais: cats, tem (listas de índices de config/setel.json > rotulos), lugar (ex.: \"SP:São Paulo\", \"EX:Paris (França)\") e ocultar (true para não exibir, útil para compromisso duplicado no e-Agendas).",
+ "960532": {
+  "ocultar": true
+ },
+ "927673": {
+  "lugar": "DF:Brasília"
+ }
+}

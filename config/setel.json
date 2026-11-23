@@ -1,0 +1,39 @@
+{
+ "ano_inicio_automatico": 2026,
+ "orgao_id": "860",
+ "url_eagendas": "https://eagendas.cgu.gov.br/",
+ "url_viagens": "https://portaldatransparencia.gov.br/download-de-dados/viagens/{ano}",
+ "autoridade": {
+  "chave": "S",
+  "nome": "Hermano Barros Tercius",
+  "nome_curto": "Hermano Tercius",
+  "servidor_id": "30634",
+  "cargo": "SECRETÁRIO DE TELECOMUNICAÇÕES"
+ },
+ "ignorar_titulos": "^(F[ÉE]RIAS|FERIADO|FOLGA|RECESSO)\\b",
+ "rotulos": {
+  "cats": [
+   "Ministro",
+   "Anatel",
+   "Governos estrangeiros e organismos",
+   "Associações do setor",
+   "Operadoras",
+   "Big techs e indústria",
+   "Telebras e EAF",
+   "Parlamento, estados e municípios"
+  ],
+  "tem": [
+   "Escolas Conectadas",
+   "Rodovias, 4G e 5G",
+   "Inclusão digital e PNID",
+   "Satélites e espaço",
+   "Faixa 3,5 GHz e TV",
+   "FUST",
+   "Norte Conectado",
+   "Data centers",
+   "Cibersegurança",
+   "Inteligência artificial",
+   "Cabos submarinos"
+  ]
+ }
+}
